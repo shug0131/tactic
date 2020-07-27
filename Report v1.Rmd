@@ -1,0 +1,202 @@
+---
+title: "TACTIC-R Simulation"
+author: "Simon Bond"
+date: "`r format(Sys.Date(),'%d %b %Y')`" 
+output: 
+  html_document:
+    css: js/hideOutput.css
+editor_options: 
+  chunk_output_type: console
+---
+<script src="js/hideOutput.js"></script>
+
+# Creating Data
+
+We define some functions to simulate failure time data, which is discretized to days, 1,2,..14. Plus adding in some censoring at day 14, or earlier with a given dropout rate. There is also a site level random interecept on the log hazard scale. 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+library(survival)
+library(magrittr)
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(knitr)
+library(kableExtra)
+
+library(doParallel)
+library(foreach)
+cl<-makeCluster(parallel::detectCores())
+registerDoParallel(cl)
+getDoParWorkers()
+
+read_chunk("sim_failure.R")
+read_chunk("priors.R")
+read_chunk("new_data.R")
+read_chunk("future_analysis.R")
+```
+
+<div class="fold s">
+```{r functions}
+<<sim_failure>>
+df <- sim_failure(n_per_arm = 125,control_surv_rate = 0.7, hr=c(0.7,1.3)) %>% 
+  add_censor(admin_cens_time = 14, drop_out=0.1)
+
+#add in site , Any other covars?
+#df$site <- rep(1:25,nrow(df)/25) %>% factor
+
+
+# surv_split the data
+
+fail_times <- df %>% filter(status==1) %>% select(time) %>% unique() %>% unlist
+df_long <- survSplit(Surv(time, status)~rx+site, df, cut=fail_times)  
+
+
+```
+</div>
+
+So assume n=125 per arm, 3 arm with HR of 0.7 and 1.3. Site log Haz SD=0.1,  and assuming 30% event rate in teh control arm at day 14. 
+
+```{r  }
+df <- sim_failure(n_per_arm = 125,control_surv_rate = 0.7, hr=c(0.7,1.3), site_raneff_sd = 0.1) %>% 
+  add_censor(admin_cens_time = 14, drop_out=0.1)
+kable(df) %>% kable_styling() %>% scroll_box(height="200px")
+survfit(Surv(time,status)~rx, data=df) %>% plot(lty=1:3, mark.time=TRUE)
+legend(0,0.6,lty=1:3, legend=levels(df$rx))
+
+```
+
+# Digression into the Poisson trick
+
+Any Cox Ph model can also be fitted using a GLM with a poisson distribution, if the individual patient history is broken up into individual time segments, and the dependent variable is an indicator as to whether they failed. The likelihoods coincide exactly, as the dependent variable only takes values 0 and 1. The latter can easily be implimented in Bayesian MCMC models/tools, but there is no readily available mapping directly to CoxPH.  Alternative Bayes methods use a flexibility parametric smoothing approach to estimate the baseline hazard. But given that there are only 14 days, this is not required, and the implimentation is far more robust to use a GLM/Poisson model via the [rstanarm pacakge](https://mc-stan.org/rstanarm/) .
+
+The match to within computing arithmetic accuracy in the fixed effects model, and when the random effects are added in, with different methods of quadrature, then they are practically identical.
+
+```{r poisson}
+fail_times <- df %>% filter(status==1) %>% select(time) %>% unique() %>% unlist
+df_long <- survSplit(Surv(time, status)~rx+site, df, cut=fail_times)  
+glm(status~-1+strata(time)+rx , family=poisson, data=df_long) %>% summary
+coxph(Surv(time,status)~rx, data=df, ties = "breslow") %>% summary
+
+glmer(status~-1+strata(time)+rx +(1|site), family=poisson, data=df_long) %>% summary
+coxph(Surv(time,status)~rx+frailty.gaussian(site), data=df, ties = "breslow") %>% summary
+```
+
+
+# Bayesian version thereof
+
+First I set some priors. These are defined by providing 5% and 95% quantiles, or 50% and 5/95% for the baseline hazard and hazard ratios, and then converting the quantiles to match up with a normal distribution. Currently the prior for the random effects uses the default option provide, which is likely to be too diffuse. 
+
+* baseline hazard: between 0.05 and 0.95 increment in cumulative hazard of failure in each day. 
+* Vague HR between 0.3 and 3.33. Equivalent to trial with 7 events
+* Optimistic HR centred on 0.7, with 95% quantile at 1, equivlaent to 85-event trial.
+* Pessimistic HR centred on 1 with 5% quantile at 0.7, equivalent to  85-event trial.
+
+<div class="fold s">
+```{r results=FALSE, message=FALSE}
+
+library(rstanarm)
+#library(brms)
+options(mc.cores = parallel::detectCores())
+library(bayesplot)
+#theme_set(bayesplot::theme_default())
+<<priors>>
+prior_list <- list("vague"=vague, "optimistic"=optimistic, "pessimistic"=pessimistic)
+effects <- c("rxE1","rxE2")
+```
+</div>
+
+Now we use the rstan and rstanarm to impliment MCMM regression, in the case of a vague prior first.
+
+```{r bayes_fit, message=FALSE, results=FALSE}
+
+# fits <- lapply(prior_list,
+#                  function(my_prior){
+#                    stan_glmer(status~-1+strata(time)+rx+(1|site), data=df_long, family=poisson,
+#                             chains=2, iter=1000,QR=FALSE, thin=2,
+#                             prior =my_prior)
+#                  }
+#   )
+
+fits <- foreach(i = 1:length(prior_list),
+                .inorder = TRUE,
+                .packages=c("rstanarm","survival"),
+                .export=c("df_long")
+                ) %dopar% {
+  stan_glmer(status~-1+strata(time)+rx+(1|site), data=df_long, family=poisson,
+                            chains=2, iter=2000,QR=FALSE, thin=2,
+                            prior =prior_list[[i]])
+}
+names(fits) <- names(prior_list)
+
+output <- NULL
+for( index  in 1:length(fits)){
+  output <- c(output, knit_child("reporting_on_model.Rmd"))
+}
+```
+
+`r knit_child(text=unlist(output))`
+
+
+
+# PRedictive Power Calculation
+
+This consist of a few steps iterated thousands of times to generate future theoretical data and then averaged
+
+* Simulate from the posteriro distribution of the model paraemters
+* Use parameters to simulate failure times of future patients 
+* analyse current data + simulated and estimate treatment effects 
+
+To use the Poisson-trick model, we first bootstrap the baseline covariates to generate an upper limit to the sample size needed. All 14 days are included, though, regarldess of the orignal patients failure time. Standard tools then can be used to generate the outcome variable from the predictive posterior distribution. The failure time is then taken to be the first day on which a non-zero outcome is observed. A Kaplan_Meier estimate of the censoring distributionis taken and this is then simulated from an applied on top of the failure times generated .  We thus obtain a 1000 replicates of a 2000 patient data set. 
+
+For each data set we then use to consider only taken forwards a subset of the arms, and fixing the total sample size.  The final analysis is performed using CoxPH (using a Bayesian MCMC version at this point would take a very long time to compute for a simulation ). Each simulation is thus declared to have show a statistically significant difference (one-side alpha=0.025). We average across teh simulatinos to caclulate the predictive power. 
+
+<div class="fold s">
+```{r power, message=FALSE}
+n_new <- 1500
+<<new_data>>
+# this gets us output : df_new_long, censor_dist,  several functions add_*()
+<<future_analysis>>  
+#creates some functions.
+
+power_df <- data.frame(power=numeric(0),
+                    ss=numeric(0),
+                    arms=character(0),
+                    prior=character(0)
+                  )
+for( index in 1:length(fits)){  
+  #index <- 1
+  fit <- fits[[index]]
+  pred_data <- posterior_predict(fit, newdata = df_new_long)
+      # all possible combination of arms, with Cx allways taken forwards
+  arms <- combinations(levels(df$rx)[-1])
+  arms <- lapply(arms, function(x){c("Cx",x)})
+  ref_ss <- c(458,687,938,1407)
+  #ans <- power(arms[[3]], n_total = ref_ss)
+  power_list <- lapply(arms, power, n_total=ref_ss)
+  arms_char <- sapply(arms, paste, collapse=", ")
+  power_df <- rbind(power_df,
+                    data.frame(power=unlist(power_list),
+                               ss=rep(ref_ss, length(arms)),
+                               arms=rep(arms_char, rep(length(ref_ss),length(arms))),
+                               prior=names(fits)[index]
+                    )
+  )
+}
+
+ggplot(power_df, aes(x=ss,y=power, group=prior, colour=prior))+
+  geom_line()+geom_point()+facet_grid(arms~.)
+
+stopCluster(cl)
+```
+</div>
+
+# Todo List
+
+* Look into setting the prior for the random effects "better".
+* Futher look into options for parallelisation: gpu and [HPC docs](https://docs.hpc.cam.ac.uk/)
+* consider nesting of foreach() %:%
+* put in some timing metric
+* Embed in a simulation with decision rules applied and new data generated
+* ONGOING Vary the scenarios of the true data generating process

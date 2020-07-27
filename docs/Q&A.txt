@@ -1,0 +1,312 @@
+  I seem to be missing a basic reference manual for HPC with its specs. Docs.hpc.cam.ac.uk is good to get started, but not the same as an O'reilly style book with the gritty details.
+
+The HPC docs are fairly good. I don't really know of a more detailed
+reference book, but I do have the BSU Intranet page which contains
+nearly everything that beginner statisticians need to know without the
+bits they don't care about. I've copied and pasted it below if it helps.
+(I don't think you can see the original page
+http://intranet.mrc-bsu.cam.ac.uk/computing/hpc-clusters/ .)
+
+I have attached a well-commented template Slurm file; it removes a bunch
+of unnecessary stuff from the HPC's templates (they are written for a
+different type of parallelism that we very rarely need.)
+
+The Slurm manual pages are here:
+https://slurm.schedmd.com/archive/slurm-19.05.5/man_index.html . In
+particular the page for the sbatch command contains the full reference
+for all the #SBATCH options in your Slurm submit script.
+
+
+Specs
+-----
+
+Peta4 CPU Cluster, 'skylake': 1152 nodes
+- 2x 16-core Intel Skylake 2.6GHz CPUs, 32 cores per node
+- 768 nodes with 192GB RAM, 384 nodes with 384GB RAM (called 'skylake-himem'
+- High-speed (10 GB/sec) interconnect between nodes and disk storage
+
+Basic Slurm Commands
+--------------------
+To see the current state of a partition, use sinfo:
+
+sinfo -p skylake
+
+The output shows the state of each of the nodes in the partition.
+Relevent states include:
+- alloc: This node is in use (allocated)
+- mix: Some cores of this node are in use, but some are free and are
+available for smaller single-core jobs
+- idle: The node is unused. Note that there will often be idle nodes,
+despite jobs waiting in the queue, as SLURM waits for sufficient idle
+nodes to run a multi-node job.
+- fail/down/drain/maint/resv: Nodes in these states are unavailable,
+either due to hardware problems, planned maintenance or because they are
+reserved for testing or courses.
+
+To look at the job queue or see the progress of your jobs, use squeue:
+
+squeue -u username
+or
+squeue -p skylake | grep -v "(Assoc.*Limit)" | less
+
+The skylake queue in particular is very long, and the grep command
+removes certain jobs that will not yet run for accounting reasons.
+Waiting jobs are shown with PD (pending) in the state (ST) column, while
+currently running jobs have a state of R. Pending jobs are ordered by
+priority, with the highest-priority jobs at the top of the queue. If the
+reason is “Dependency”, then that job is currently waiting for a running
+job to finish.
+
+If you are impatient, you can watch the progress of your jobs by using
+watch, specifying the number of seconds to refresh (press Ctrl+C to exit):
+
+watch -n 60 squeue -u username
+
+You can examine more details about a particular job with scontrol, where
+nnnn is the job number shown in squeue or when a job is submitted:
+
+scontrol show job nnnn
+
+To cancel a running job, use scancel. You can provide a comma-separated
+list of multiple job ids.
+
+scancel nnnn
+
+Writing an SLURM Script and Submitting a Job
+--------------------------------------------
+
+To submit a job to the queue, first you need to write a submit script.
+See the attached template. This script contains two sections. First is a
+set of SBATCH commands which specify the resources your job needs. After
+this are Linux commands to set up your environment and run the job.
+
+This second section of the file can contain any arbitrary Bash script,
+but the templates assume that your job can be run with a single command,
+and we recommend writing your code this way.
+
+When you have written your SLURM script, you submit your job to the
+queue with the command:
+
+sbatch my_submit_file.txt
+
+Array Jobs
+----------
+
+A common task is to run many almost-identical jobs, changing only the
+data sample or parameters for each run. SLURM makes this easy with array
+jobs.
+
+To run an array job, you create one SLURM file, which contains a line like:
+
+#SBATCH -array 1-500%100
+
+This creates 500 identical jobs, numbered 1-500. SLURM places them all
+in a queue and allocates resources as if you had submitted 500 separate
+jobs. The job numbers can be arbitrary, for example you can use a line
+like #SBATCH -array 15-30,60-90,100,160%20 to run specific tasks.
+
+Note: The resources requested in your SLURM file are for each individual
+job element, not for the entire batch of jobs. So for 500 single-core
+jobs, you still specify “–cpus-per-core=1”.
+
+The number after the % is the maximum number of tasks to run at once,
+and is only necessary on the internal purcell cluster. Please set this
+wisely, depending on the size of the queue and the length of your jobs,
+so that other users can share the cluster with you.
+
+To allow your code to select the right parameters or data set, SLURM
+sets a Linux environment variable, named SLURM_ARRAY_TASK_ID, containing
+the ID number of the current job. To read this in R, use:
+
+task_id_string <- Sys.getenv("SLURM_ARRAY_TASK_ID")
+task_id <- as.numeric(task_id_string)
+
+When you are testing your code outside of SLURM, this variable isn’t set,
+
+Warning:If you are writing output to file, you should take care to write
+to a unique file for each job, otherwise your jobs will overwrite each
+other. You can generate filenames containing the job number using a line
+similar to:
+
+filename <- paste0("file_", task_id, ".RData")
+
+Queueing Times
+--------------
+
+The cluster is designed to run at close to 100% capacity, so inevitably
+there will be queues. In most cases, the queueing time should be no more
+than an hour or two.
+
+For testing and development, you can request an interactive job. These
+jobs are limited to 1 hour, one job per person, and are given a very
+high priority so should run almost immediately. Adapt the following
+command, or specify the –qos parameter in your SLURM script. The sintr
+command will give you a command line prompt one one of the compute nodes:
+
+sintr -A mrc-bsu-sl2-cpu -p skylake -c 1 -t 1:0:0 --qos-INTR
+
+Please only use this for testing purposes, not for normal jobs.
+Performance
+
+To check the performance of a job, you can ssh directly to a compute
+node when you have a job running on it. Use squeue to find the name of
+the node your job is on, and then run a command like:
+
+ssh cpu-e-123
+
+You can then use the top or htop commands to view the memory and CPU
+usage. Identify the relevent job by looking at the user name and the
+command. CPU usage is shown as a percentage. For parallel jobs, this
+number should be greater than 100%, and the closer it gets to 100 *
+number of cores, the better-optimised your code is. Memory is shown in
+kilobytes in top; press ‘e’ to change this to megabytes or gigabytes.
+Press ‘q’ to quit.
+
+Parallel random number generation
+---------------------------------
+
+Be warned that most default random number generators (RNGs) are not
+suitable for parallel code. This is especially true when writing C++
+code, where using an RNG not designed for parallel use can crash your
+program.
+
+When using R, foreach/dopar parallelism creates a separate RNG for each
+thread, so the code is safe, but it is not reproducible as there is no
+guarantee which order the threads are created in. You should use the
+doRNG package to ensure your code is reproduceable.
+
+In C++, a vector of RNGs is usually a suitable solution.
+
+Long Jobs
+---------
+
+Jobs are limited to a maximum time limit of only 36 hours. This aids
+scheduling and maintenance by preventing a long job tying up a compute
+node for several weeks.
+
+Some software packages already include a stop and resume capability, and
+you should use this if it exists. We also encourage those writing their
+own packages to consider adding this feature, although we recognise that
+it requires a decent amount of time and effort.
+
+If your software cannot natively stop and resume, the HPC provides the
+‘DMTCP’ checkpointing software. This software takes a complete snapshot
+of the memory of your program and output files, and will restart a
+program from that point.
+
+Here is a bash script that controls DMTCP <LINK TO BE ADDED> and enables
+automatic requeueing of unfinished jobs. To use it, read the
+documentation at the beginning of the script, and then copy and paste
+the script into your SLURM submit scripts.
+
+The script has been tested on simple single-core and parallel jobs.
+However, there is no guarantee that it will work with every job, so I
+strongly recommend testing your application on a short run first to make
+sure everything works correctly.
+
+The script does not currently support MPI-style parallelism or array
+jobs. DMTCP does not support GPUs. Tensorflow and related applications
+have a built-in save/resume feature, and the pascal-long queue is
+available if necessary.
+
+Storage
+-------
+
+There are several different storage locations on the HPC
+
+- Home directory: /home/CRSid
+     40GB per user. Backed up, although accessing backups requires
+contacting HPC support
+- Scratch space: /home/CRSid/rds/hpc-work
+     1TB per user. This space is not backed up. It is high-performance
+and intended for use by currently running jobs, for example for saving
+checkpoints or large output files.
+- RDS: /home/CRSid/rds/<project-name>
+     This space is for large datasets and shared project spaces. Not
+backed up. For more details, or to create a project, contact Colin.
+- BSU Scratch disk: /mrc-bsu/scratch/CRSid
+     160TB, shared among all users. Not backed up. This space will be
+decommissioned by the end of 2019. Affected users will be contacted
+before then to transfer data to an RDS project.
+
+
+
+
+On 01/06/2020 16:14, Bond, Simon wrote:
+> Hi Colin,
+>
+> Thanks for these thoughts. I've been reading up and trying out the parallelism, so it does chime well with my forays so far.
+>
+> Here's a brain-dump of questions..
+>
+> * forking vs clustering.  It seems the former is a lot better, but only works on linux/mac, which is not a limitation. So any downsides?
+
+You shouldn't dabble directly with forking, and as long as you don't
+want to use Windows you don't need to be aware of any of these technical
+details. Stick with the registerDoParallel code snippet I included.
+
+(When these packages were first written, it was more difficult to set up
+the parallel system, but the newer parallel library makes things much
+easier.)
+
+> * you mix up mclapply and foreach. Is this just a difference in syntax, rather than performance?
+
+Pretty much just a difference in syntax. If you have an lapply, you use
+mclapply; if you have a loop, you use foreach. They both share tasks
+over cores in much the same way, and there isn't any noticeable
+performance difference.
+
+> * There are 3 options at the basic level of where to login. CPU, KNL, GPU.   I think GPU is not suitable, but how to choose between the other two?  I seem to be missing a basic reference manual for HPC with its specs. Docs.hpc.cam.ac.uk is good to get started, but not the same as an O'reilly style book with the gritty details.
+
+Use login-cpu.hpc.cam.ac.uk. Both GPU (graphics processing units) and
+KNL (Knight's Landing) processors are designed for more specialized
+types of parallelism that you won't use.
+
+I'll send you some notes on getting started with the HPC separately.
+
+> * How many nodes to request for a job?  Am I being thick here, or should I just try to go for the maximum of the system or the number of loops, whichever is smaller?
+
+You want one node only - this type of parallelism only works on one
+node. And for 1000 iterations, you want to request all 32 cores. (The
+foreach() will automatically distribute iterations to the cores in a
+smart way.) If this is still too slow we can look at extending to
+multiple nodes, but I think one node should be sufficient.
+
+> * Nesting still might be needed. Splitting the power calculation in half say would be v valuable, and then nesting this inside a 1000 simulation loops.    Do you know if once a "parent" loop has been fired off in parallel, then everything within an individual step must thence be completed within 1 core, and so no further nesting of parallel process is possible?
+
+When number of iterations >> number of cores, having nested parallel
+loops will actually be slower, not faster. This is due to the overhead
+of setting up, and because parts of the inner code (future_analysis())
+would not be parallelised.
+
+The only time nested parallelism makes sense is in situations like the
+Stan loop when the number of iterations in both loops (number of priors
+and number of chains) is small.
+
+>   * I'm also assuming that it is impossible to call registerDoParallel(cl) in a nested fashion. So I'm guessing that I have to set the number of cores once at the start, and run with it.
+
+You assume correctly, but that's OK, you don't want nested parallelism.
+
+> * maybe I need to use the %:% nesting syntax in combination with elaborate combine functions ...
+> * Are there any tools for measuring how long steps take, so as to try out different options, and optimise?
+
+The easiest is system.time() - make sure you use 'elapsed' - or other R
+timing features. More fancy profiling tools usually don't work well in
+parallel code; I am not aware of any R profilers that do.
+
+> * In terms of a development environment, what tools would you recommend?  I will have a go at getting up a VNC desktop rather than just a command line and explore. I'm used to using Rstudio.
+
+If you have enough cores on your home computer, I recommend developing
+and testing on that in RStudio, and only moving to the HPC when you are
+ready to do long runs.
+
+Jobs on the HPC are usually not run interactively from RStudio or a
+command-line R session. Instead, they should be written so they can be
+run entirely hands-free with a command like
+
+Rscript myCode.R [arg1 arg2 ...]
+
+You login, submit a job, then go away and come back when it is done.
+
+Regards,
+Colin

@@ -1,0 +1,64 @@
+REMEMBER TO RUN 
+rclone sync -u ~/Documents/ remote:PCDocuments --backup-dir remote:oldVersions/PCDocuments
+
+AT THE END OF A DAYS work on LOCAL UBUNTI PC
+Else any deleted files from the googledrive copy will get put back at the start of the next day.
+
+
+ssh sjb277@login-cpu.hpc.cam.ac.uk
+module load r-3.6.1-gcc-5.4.0-zrytncq
+scp sjb277@login-cpu.hpc.cam.ac.uk:
+
+cd ~/Documents/Work ; rsync -trvp --exclude "library/" --exclude "results/" --exclude ".git/" --exclude ".Rproj.user/" --delete --delete-after -e  ssh "tactic" sjb277@login-cpu.hpc.cam.ac.uk:
+
+
+rsync -t -e ssh sjb277@login-cpu.hpc.cam.ac.uk:tactic/* .
+
+#rsync -t -e ssh sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/* results/
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/* results
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/null/inference* results/null
+# and need to delete the file first...
+
+#DONE be good to sort out openssh keys or similar, to avoid typing in password all teh tyime
+#DONE have set up command line to read a scenario. Want auto creation of result folders.., and #DONE createa copy of the script verbatim.
+
+cd tactic
+
+./slurm_wraper "null" 1
+#sbatch slurm_model_sim_fit_skylake.txt 
+squeue -u sjb277
+scancel nnnn
+watch -n 30 squeue -u sjb277
+
+# jobs that get 'held'
+scontrol release 25027069_671 25027069_760
+
+
+Stage 2:
+
+Then apply decision rules and future data, analysis
+
+#chmod +x slurm_wrapper_future_inference.sh
+./slurm_wrapper_future_inference "null" 1
+#sbatch slurm_model_sim_fit_skylake.txt 
+squeue -u sjb277
+scancel nnnn
+watch -n 30 squeue -u sjb277
+
+Rscript operating_characteristics.R good_ugly
+
+
+# jobs that get 'held'
+scontrol release 25027069_671 25027069_760
+
+
+
+STage 3:
+
+correlate the tools at the first interim with the ultimate inference..
+check type 1 error to start with. Generall Ooperating characteristics
+
+got nearly all the scenarios with OCs,  now join together and visualise.
+
+
+

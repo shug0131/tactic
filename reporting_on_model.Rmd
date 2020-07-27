@@ -1,0 +1,43 @@
+
+## Prior: `r names(fits)[index]`
+
+<div class="fold s">
+```{r, message=FALSE}
+index <- 1
+
+fit <- fits[[index]]
+fit %>% summary
+plot(fit, pars=effects, plotfun = "areas", transformations="exp")+
+  labs(x="Hazard Ratio")+scale_y_discrete(labels=c("E1 vs Control  ","E2 vs Control  "))+
+  scale_x_log10(breaks=c(seq(0.4,1,by=0.1),seq(1,3,by=0.2)))+geom_vline(xintercept=c(0.7,1), col="grey")
+
+#plot(fit, pars=effects, "hist")
+#plot(fit, pars=effects, "violin")
+#plot(fit, pars=effects, "dens_overlay")
+plot(fit, pars=effects, "trace")
+plot(fit, pars=effects, "acf_bar")
+
+posterior <- as.array(fit)
+#dimnames(posterior)
+
+prob_interval <- function(X, interval){
+  Y <- interval[1]< X & X <interval[2]
+  mean(Y)
+}
+efficacy <- apply(posterior, 3, FUN=prob_interval, interval=c(-Inf, 0))[effects]
+moderate_efficacy <- apply(posterior, 3, FUN=prob_interval, interval=c(-Inf, log(0.8)))[effects]
+similarity <- apply(posterior, 3, FUN=prob_interval, interval= log(c(0.8,1.25)))[effects]
+harm <- apply(posterior, 3, FUN=prob_interval, interval= c(0,Inf))[effects]
+```
+
+
+
+Reporting as per section 15.2 of the protocol to give the posterior probability of the HR lieing in various ranges of interest.
+
+```{r}
+
+X <- rbind(efficacy, moderate_efficacy, similarity, harm) %>% as.data.frame
+X <- cbind(HR=c("<1","<0.8","0.8-1.25",">1"),X)
+X %>% kable(row.names=FALSE, col.names=c("HR","E1 vs Control  ", "E2 vs Control  "))
+```
+</div>
