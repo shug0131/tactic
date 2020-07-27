@@ -13,7 +13,7 @@ system("ln -s ~/rds/hpc-work/ ~/tactic/results")
 
 output <- list.files(path=paste0("./results/", scenario_arg), pattern="inference*")
 
-df <- readRDS(paste0("results/",scenario_arg,"/inference_results_1.rds"))
+df <- readRDS(paste0("results/",scenario_arg,"/inference_results_100.rds"))
 
 results_df <- cbind(df[0,], data_set=integer(0))
 for( file in output){
