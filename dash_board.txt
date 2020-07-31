@@ -60,5 +60,12 @@ check type 1 error to start with. Generall Ooperating characteristics
 
 got nearly all the scenarios with OCs,  now join together and visualise.
 
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/null/oc_results.rds oc_results/null.rds
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/one_winner/oc_results.rds oc_results/one_winner.rds
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/medium_events/oc_results.rds oc_results/medium_events.rds
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/low_events/oc_results.rds oc_results/low_events.rds
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/worst_definition/oc_results.rds oc_results/worst_definition.rds
+scp sjb277@login-cpu.hpc.cam.ac.uk:rds/hpc-work/good_ugly/oc_results.rds oc_results/good_ugly.rds
+
 
 
