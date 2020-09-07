@@ -1,3 +1,6 @@
 library/*
 results/*
+.Rproj.user
+results_dump
+.gitignore
 
