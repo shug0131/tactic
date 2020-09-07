@@ -1,0 +1,39 @@
+---
+title: "TACTIC-R Simulation Work"
+author: "Simon Bond"
+date: "07/09/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Abstract
+
+
+# Introduction 
+
+TACTIC-R and TACTIC-E, and two trials of repurposed and experimental drugs respectively, in the severe COVID population, with Standard of Care as control and initial 2 other arms [check this detail] for the treatments. The endpoint is time to failure  ( a composite endpoint).   The intention is to have interim analyses that allow treatment arms to be dropped and/or new treatments to be added. The rules for such adaptations were left rather flexible at the time of the protocol being developed in very short time. This report is an attempt to consider the risks and advise on how such decisions could be made. 
+
+
+
+
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,7 +1,7 @@
-Scenario,model_sim_fit,Job_id,future_inference,Job_id,operating_char
-null,done,,done,25977068,done
-one_winner,done,,done,25977069,done
-medium_events,done,,done,25977070,done
-low_events,done,25950865,done,26048226,done
-worst_definition,done,25977378,done,26048264,done
-good_ugly,done,26309683,done,26364531,done
+Scenario,model_sim_fit,Job_id,future_inference,Job_id,operating_char,,download to uni pc
+null,done,,done,25977068,done,,07/09/2020
+one_winner,done,,done,25977069,done,,07/09/2020
+medium_events,done,,done,25977070,done,,07/09/2020
+low_events,done,25950865,done,26048226,done,,07/09/2020
+worst_definition,done,25977378,done,26048264,done,,07/09/2020
+good_ugly,done,26309683,done,26364531,done,,07/09/2020
