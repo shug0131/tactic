@@ -1,6 +1,6 @@
-scenario_df <- read.csv(file="../scenario_df.csv", stringsAsFactors = FALSE)
+scenario_df <- read.csv(file="scenario_df.csv", stringsAsFactors = FALSE)
 for(scenario in scenario_df$scenario){
-  df <- readRDS(paste0(scenario,".rds"))
+  df <- readRDS(paste0("oc_results/",scenario,".rds"))
   assign(scenario, df)
 }
 

@@ -2,7 +2,7 @@
 ## @knitr future_analysis
 
 
-# For each row of pred_DataA EudraCT results user with this username and email address cannot be found
+# For each row of pred_DataA 
 future_analysis <- function(prediction, newdata, olddata, 
                             arms=NULL, 
                             n_total=nrow(newdata)+nrow(olddata)
