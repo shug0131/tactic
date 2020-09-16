@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+.libPaths("../library")
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -68,7 +69,7 @@ The rstanarm R package was used to perform MCMC inference using the generated da
 
 Following on, the fitted models were used to  calculate the posterior probability that each of the two HRs lay within several reference values (0.8,1,1.25), and the outputs saved as `posterior_probs_*.rds`.
 
-A standard frequentist version of the fitted model from `coxph()` was also saved (which includes the original data), into `coxfit_*.rds`
+A standard frequentist version of the fitted model from `coxph()` was also saved into `coxfit_*.rds`
 
 Then we generate 1500 pseudo observations from the predictive posterior distribution, taking a bootstrap sample of baseline covariates as needed. This was iterated 1500 times (the same number as the posterior sampling), and then processed into a set of 1500 combined pseudo data sets of the original data and predictive posterior distribution samples `new_data.R`. 
 
@@ -107,12 +108,104 @@ The final aggregation of results of the iterations calculates: bias, power, mean
 Similar to the first set of batch computing, we run the shell script `slurm_wrapper_future_inference "null" 1`, which calls the template `slurm_future_inference_skylake.txt`, whcih repeated calls `future_real_data.R` .
 
 
-## Including Plots
+# Results
 
-You can also embed plots, for example:
+## Null
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r show_results}
+scenario_df <- read.csv(file="../scenario_df.csv", stringsAsFactors = FALSE)
+for(scenario in scenario_df$scenario){
+  df <- readRDS(paste0(scenario,".rds"))
+  assign(scenario, df)
+}
+
+obj_list <- lapply(scenario_df$scenario, as.name)
+all <- Reduce(rbind, lapply(obj_list,eval))
+
+rm(list=scenario_df$scenario)
+rm(obj_list, scenario)
+
+
+library(tidyr)
+library(dplyr)
+all <- left_join(all, scenario_df, by="scenario")
+
+library(ggplot2)
+library(magrittr)
+all %<>% mutate(hr=ifelse( arm=="rxE1",hr1,hr2))
+
+all_long <- gather(all,key="metric",value="value", power, bias,mse, coverage, bayes_mse, bayes_bias, bayes_coverage)
+
+
+all_long %>% ggplot(aes(y=value,x=hr, group=rule, colour=rule))+geom_line()+
+  facet_grid(arm~metric)
+
+all_long %>% filter(scenario=="null") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Alternative HR=0.7 & 1
+
+### Control Rate = 0.7
+
+```{r}
+all_long %>% filter(scenario=="one_winner") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+```
+
+### Control Rate = 0.8
+
+```{r}
+all_long %>% filter(scenario=="medium_events") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+```
+
+### Control Rate = 0.9
+
+```{r}
+all_long %>% filter(scenario=="low_events") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+```
+
+## Positive but one arm < MCID
+
+### Good-Ugly HR= 0.6 and 0.85, control rate =0.9
+
+```{r}
+all_long %>% filter(scenario=="good_ugly") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+```
+
+### Worst Case HR= 0.7 and 0.85, control rate =0.9
+
+```{r}
+all_long %>% filter(scenario=="worst_definition") %>% 
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+
+  facet_wrap(~metric, scales = "free_y")
+```
+
+
+## Expected Sample Size
+
+```{r expect_ss}
+n <- c(125,229,468)
+all$expect_ss <- as.matrix(all[,paste0("stage_",1:3)])%*%n  %>% as.vector
+
+all %>% ggplot(aes(y=expect_ss, x=rule, group=arm, colour=arm))+ 
+  geom_point()+geom_line() +facet_wrap(~scenario)+
+  theme(axis.text.x = element_text(angle = -45, hjust=0))+
+  labs(y="Expected Sample Size per arm")
+
+```
