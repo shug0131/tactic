@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 .libPaths("../library")
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 # Abstract
@@ -93,15 +93,15 @@ As distinct from generating data from the predictive posterior, which is the onl
 
 Sufficient data is generated to cover the combinations of arms and maximum sample sizes. 
 
-Stopping boundaries for Off-the-shelf group sequential designs, for the relevant interim sample sizes, were calculated within `decision_rules.R`, for O'Brien-Femming, Triangular, and Pocock error-spending. At each interim size a frequentist `coxph()` fit was performed and a bayesian model fitted as well. The stopping rules were evaluated, estimates recorded, and bayesian psoterior probabilities calculated much like at the initial interim, and a rule to stop an arm for success if Pr(HR<0)>0.95, considered for each of the three prior distributions.
+Stopping boundaries for Off-the-shelf group sequential designs, for the relevant interim sample sizes, were calculated within `group_sequential_design.R`, for O'Brien-Femming, Triangular, and Pocock error-spending. At each interim size a frequentist `coxph()` fit was performed and a bayesian model fitted as well. The stopping rules were evaluated, estimates recorded, and bayesian psoterior probabilities calculated much like at the initial interim, and a rule to stop an arm for success if Pr(HR<0)>0.95, considered for each of the three prior distributions.
 
 But no further calculation of the predictive power was not repeated, as the aim of this report and simulation exercise is to help judge what the optimal course of action is _at the first interim_. Conceptually, backward induction could be used to improve this, but at the moment would be too challenging computationally. 
 
-This was repeated to match up with the 1000 iterations of data orginally generated, and the outputs of the first interim analysis.  For each iteration and stopping rule, a final analysis was performed to provide the estimate/SE, incidence of the 95% CI containing the true parameter, sample size at stopping.
+This was repeated to match up with the 1000 iterations of data orginally generated, and the outputs of the first interim analysis.  For each iteration and stopping rule, a final analysis was performed to provide the estimate/SE, incidence of the 95% CI containing the true parameter, sample size at stopping; this was done using frequentist coxph() methods, and a bayesian version thereof, but only using the vague prior and excludign the other two priors for parsimony.
 
 Each iteration save the set of results at `ifnerence_results_*.rds`
 
-The final aggregation of results of the iterations calculates: bias, power, mean squared error, and coverage, within `operating_characteristics.R` with the results for each scenario in `oc_results.rds`.
+The final aggregation of results of the iterations calculates: bias, power, mean squared error, and coverage, applied to the frequentist and bayesian (excluding power) estimation within `operating_characteristics.R` with the results for each scenario in `oc_results.rds`.
 
 ### Computation Details
 
@@ -112,7 +112,7 @@ Similar to the first set of batch computing, we run the shell script `slurm_wrap
 
 ## Null
 
-```{r show_results}
+```{r show_results, echo=FALSE}
 scenario_df <- read.csv(file="../scenario_df.csv", stringsAsFactors = FALSE)
 for(scenario in scenario_df$scenario){
   df <- readRDS(paste0(scenario,".rds"))
@@ -137,13 +137,17 @@ all %<>% mutate(hr=ifelse( arm=="rxE1",hr1,hr2))
 all_long <- gather(all,key="metric",value="value", power, bias,mse, coverage, bayes_mse, bayes_bias, bayes_coverage)
 
 
-all_long %>% ggplot(aes(y=value,x=hr, group=rule, colour=rule))+geom_line()+
-  facet_grid(arm~metric)
+#all_long %>% ggplot(aes(y=value,x=hr, group=rule, colour=rule))+geom_line()+
+#  facet_grid(arm~metric)
 
 all_long %>% filter(scenario=="null") %>% 
   ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
   geom_point()+
   facet_wrap(~metric, scales = "free_y")
+
+all_long %>% filter(scenario=="null" & metric=="power") %>%  
+  ggplot(aes(y=value, x=arm,colour=rule, group=rule))+
+  geom_point()+lims(y=c(0,0.1))+labs(y="Power")
 
 ```
 
@@ -209,3 +213,38 @@ all %>% ggplot(aes(y=expect_ss, x=rule, group=arm, colour=arm))+
   labs(y="Expected Sample Size per arm")
 
 ```
+
+# Conclusions
+
+The classical group sequential designs all suceed in stricly controlling the type 1 error rates to 1-sided 2.5% rate, under teh null. The Bayesian  _rules_ ( as opposed to final inference) with  a vague prior go up to 10%. This might still be acceptable, particularly for Tactic-R, but maybe not with TACTIC-e that wishes to acheive licencing potentially. The bayesian rule with an optimistic prior has an unncaptably high type1 error rate. 
+
+OTherwise, the Bayesian rules generaly achieve better power for alternativ hypotheses. 
+
+The coverage is broaldy acceptable across most choice of ryles and inference.
+
+For biases, the Bayesian inference has small-modest bias for all the rules. THe frequentist inference give small-modest bias for teh freuqentist rules, but does poorly for Bayesian rules.
+
+Sample size shows similar patterns across different scenarios
+
+* optimistic stop early often
+* triangular stops early but slight bigger ESS compared to optimistic
+* O'Brien-Flemming, Pessimistic, Pocock, recruit the maximum size generally
+* Vague stops early if there is a large treatment effect, but otherwise recruits the maximum size generally. 
+
+If I had to make a recommendation I would choose to use teh Vague prior decision rule, and perfom Bayesian inference as teh final analysis. 
+
+
+This simulation has been based around there being a rigid group sequential design with 3 fixed possibilities of sample size per arm. There is plausibly more flexibility in reality. I coudl investigate formulate rules to choose sample sizes at interims. But it is not clear if there is a theoretical argument to stick to group sequential designs. 
+
+Are there any further simulations that shoudl be done at this point.
+
+Could we anticipate what further  simulations might be needed at the time of interims, and try to pre-prepare reports, and/or code. 
+
+There is a wider questino of the overall fate of this study. Both are being expanded to INdia, Mexico, Brazil. Tactic-R in India is a two-armed study with one of the active arms not being assigned.  If the UK trial does not recruit, substantively then the chocie of decisions to be made at interim analyses is reduced; at the time of writing (Sep 2020) there is a second wave possibly startign to happen. 
+
+Risk that the code is at fault in some way, given the complexity of this simulation. Please do comment if anythign looks at odds with your knowledge. Happy to look closer wherever suggested. 
+
+
+
+
+
