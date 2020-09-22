@@ -1,13 +1,13 @@
 ---
 title: "TACTIC-R Simulation Work"
 author: "Simon Bond"
-date: "07/09/2020"
-output: html_document
+date: "22/09/2020"
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 .libPaths("../library")
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 ```
 
 # Abstract
@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 # Introduction 
 
-TACTIC-R and TACTIC-E, and two trials of repurposed and experimental drugs respectively, in the severe COVID population, with Standard of Care as control and initial 2 other arms (Baricitinib, Ravulizumab) for the treatments. The endpoint is time to failure  ( a composite endpoint).   The intention is to have interim analyses that allow treatment arms to be dropped and/or new treatments to be added. The rules for such adaptations were left rather flexible at the time of the protocol being developed in very short time. This report is an attempt to consider the risks and advise on how such decisions could be made. 
+TACTIC-Ris a  trial of repurposed drugs in the severe COVID population, with Standard of Care as control and initial 2 other arms (Baricitinib, Ravulizumab) for the treatments. TACTIC-E is a trial of experimental drugs in an otherwise similar trial design. The endpoint is time to failure  ( a composite endpoint) up to 14 days of follow-up.   The intention is to have interim analyses that allow treatment arms to be dropped and/or new treatments to be added. The rules for such adaptations were left rather flexible at the time of the protocol being developed in very short time. This report is an attempt to consider the risks and advise on how such decisions could be made. 
 
 A simulation approach was taken to estimate the long term operating characteristics of proposed decision rules under a variety of scenarios representing the true data generatng process and thus the treatment effects.  This document has a double purpose: document how this was done with a skeleton guide to the code files that were developed ;  present the results of the simulations and make recomendations.  The R code files are mirorred in a github repository `shug0131\tactic`.
 
@@ -33,9 +33,9 @@ The computing resources needed to carry this out in a timely fashion were substa
 
 ### Data Generation
 
-The scenarios considered are described in the table below
+The scenarios considered are described in the table below. Further scenarios coudl be added if desired. 
 
-Label | Control Failure rate | HR Bar v SoC | HR Rav v SoC | Drop out rate
+Label | 14-day Control Failure rate | Hazar ratio Bar v SoC | Hazard Ratio Rav v SoC | Drop out rate
 -----| --------------------- |--------------|--------------|--------------
 one_winner| 0.7  | 0.7 | 1 |  0.1
 null| 0.7 | 1 |1 | 0.1
@@ -73,7 +73,7 @@ A standard frequentist version of the fitted model from `coxph()` was also saved
 
 Then we generate 1500 pseudo observations from the predictive posterior distribution, taking a bootstrap sample of baseline covariates as needed. This was iterated 1500 times (the same number as the posterior sampling), and then processed into a set of 1500 combined pseudo data sets of the original data and predictive posterior distribution samples `new_data.R`. 
 
-The sample size of each data thus exceeds 2000 patients. For each combination of arms to continue recruiting (all 3, dropping either of Bar or Rav), and a fixed range of sample sizes (458,687,938,1407), for the _overall sample size_ regardless of there being 2 or 3 arms, a subset of the large data set was taken to match up. A standard frequentist cox model was fitted to each subset and each of the 1500 replications, from which the estimates and SE of the HRs were recorded, along with a declaration of statisticial significance for either or both comparisons. These were then averaged across the replications to provide the predictive power.  A data set with rows for each arm combination and sample size, plus the predictive power was saved as `power_*.rds`
+The sample size of each data thus exceeds 2000 patients. For each combination of arms to continue recruiting (all 3, dropping either of Bar or Rav), and a fixed range of sample sizes (458,687,938,1407), for the _overall sample size_ regardless of there being 2 or 3 arms, a subset of the large data set was taken to match up. A standard frequentist cox model was fitted to each subset and each of the 1500 replications, from which the estimates and SE of the HRs were recorded, along with a declaration of statisticial significance for either or both comparisons. These were then averaged across the replications to provide the predictive power.  A data set with rows for each arm combination and sample size, plus the predictive power was saved as `power_*.rds` . However, currently the predictive power was not used to make decisions, in the subsquent simulations below. Future work could consider using this interim calculation to make choices on sample size or which arms to use.
 
 ### Computation details. 
 
@@ -91,7 +91,7 @@ This step was implemented by running the shell script `slurm_wrapper.sh`, which 
 
 As distinct from generating data from the predictive posterior, which is the only option during the real trial at the interim stage, for the _simulation_ we next generate future data according the true parameters as set by the choice of scenario. 
 
-Sufficient data is generated to cover the combinations of arms and maximum sample sizes. 
+Sufficient data is generated to cover all the possible combinations of arms and maximum sample sizes. 
 
 Stopping boundaries for Off-the-shelf group sequential designs, for the relevant interim sample sizes, were calculated within `group_sequential_design.R`, for O'Brien-Femming, Triangular, and Pocock error-spending. At each interim size a frequentist `coxph()` fit was performed and a bayesian model fitted as well. The stopping rules were evaluated, estimates recorded, and bayesian psoterior probabilities calculated much like at the initial interim, and a rule to stop an arm for success if Pr(HR<0)>0.95, considered for each of the three prior distributions.
 
